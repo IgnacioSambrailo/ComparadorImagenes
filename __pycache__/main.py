@@ -1,6 +1,5 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QFileDialog
+from PyQt5 import QtGui, QtWidgets
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog
 import sys
 import cv2
 import numpy as np
@@ -17,10 +16,14 @@ class ImageCompare(QWidget):
         self.image_paths1 = []
         self.image_paths2 = []
         self.output_dir = ""
+        self.file_label1 = QtWidgets.QLabel()
+        self.file_label2 = QtWidgets.QLabel()
 
         # Configurar ventana
         self.setWindowTitle("Comparación de imágenes")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 450, 260)
+        # self.setFixedSize(450,260)
+        self.setWindowIcon(QtGui.QIcon("./AppImages/lupa.ico"))
 
         # Configurar widgets
         self.input1_label = QLabel("Seleccione los diseños originales")
@@ -31,6 +34,7 @@ class ImageCompare(QWidget):
         self.dir_button = QPushButton("Seleccionar directorio")
         self.start_button = QPushButton("Comenzar análisis")
         self.result_label = QLabel("Resultados:")
+        self.result_directory = QLabel()
 
         # Conectar botones a funciones
         self.input1_button.clicked.connect(self.select_image1)
@@ -42,10 +46,13 @@ class ImageCompare(QWidget):
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.input1_label)
         self.layout.addWidget(self.input1_button)
+        self.layout.addWidget(self.file_label1)
         self.layout.addWidget(self.input2_label)
         self.layout.addWidget(self.input2_button)
+        self.layout.addWidget(self.file_label2)
         self.layout.addWidget(self.dir_label)
         self.layout.addWidget(self.dir_button)
+        self.layout.addWidget(self.result_directory)
         self.layout.addWidget(self.start_button)
         self.layout.addWidget(self.result_label)
         self.setLayout(self.layout)
@@ -54,18 +61,27 @@ class ImageCompare(QWidget):
         with open(image_path, "rb") as f:
             image_bytes = f.read()
             encoded = base64.b64encode(image_bytes)
-            return encoded.decode(errors="replace")
-
-
+            return encoded.decode(errors="replace") 
 
     def select_image1(self):
         self.image_paths1, _ = QFileDialog.getOpenFileNames(self, "Seleccionar imágenes", "", "Images (*.png *.xpm *.jpg *.bmp)")
+        self.nombre_imagenes1 = []
+        for imagen in self.image_paths1:
+            self.nombre_imagenes1.append(imagen.split("/")[-1])
+        self.string_nombre_imagenes1 = ','.join(self.nombre_imagenes1)
+        self.file_label1.setText(f"Imagenes seleccionadas: {self.string_nombre_imagenes1}")
 
     def select_image2(self):
         self.image_paths2, _ = QFileDialog.getOpenFileNames(self, "Seleccionar imágenes", "", "Images (*.png *.xpm *.jpg *.bmp)")
+        self.nombre_imagenes2 = []
+        for imagen in self.image_paths2:
+            self.nombre_imagenes2.append(imagen.split("/")[-1])
+        self.string_nombre_imagenes2 = ','.join(self.nombre_imagenes2)
+        self.file_label2.setText(f"Imagenes seleccionadas: {self.string_nombre_imagenes2}")
 
     def select_output_dir(self):
         self.output_dir = str(QFileDialog.getExistingDirectory(self, "Seleccionar directorio"))
+        self.result_directory.setText(f"Ruta seleccionada: {self.output_dir}")
 
     def start_analysis(self):
         if not self.image_paths1 or not self.image_paths2:
@@ -86,13 +102,14 @@ class ImageCompare(QWidget):
             img2 = cv2.imread(path2)
 
             # Hago resize de las imagenes
-            scale_percent = 20 # Porcentaje del resize
-            width = int(img1.shape[1] * scale_percent / 100)
-            height = int(img1.shape[0] * scale_percent / 100)
-            dim = (width, height)
+            # scale_percent = 20 # Porcentaje del resize
+            # width = int(img1.shape[1] * scale_percent / 100)
+            # height = int(img1.shape[0] * scale_percent / 100)
+            # dim = (width, height)
 
-            img1 = cv2.resize(img1, dim, interpolation = cv2.INTER_AREA)
-            img2 = cv2.resize(img2, dim, interpolation = cv2.INTER_AREA)
+            # img1 = cv2.resize(img1, dim, interpolation = cv2.INTER_AREA)
+            # img2 = cv2.resize(img2, dim, interpolation = cv2.INTER_AREA)
+            print(img1.shape)
 
             # Convierte las imágenes a escala de grises
             gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
@@ -109,7 +126,6 @@ class ImageCompare(QWidget):
             dilate = cv2.dilate(thresh, kernel, iterations = 3)
 
             # Encuentro los contornos
-
             contornos = cv2.findContours(dilate.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             contornos = imutils.grab_contours(contornos)
 
@@ -123,11 +139,10 @@ class ImageCompare(QWidget):
                     cv2.rectangle(img2, (x,y), (x+w,y+h), (0,0,255),2)
 
             # Mostrar imagenes finales con resultado
-            x = np.zeros((480,10,3), np.uint8)
+            x = np.zeros((img1.shape[0],10,3), np.uint8)
             result = np.hstack((img1, x ,img2))
-            cv2.imwrite('result.jpg', result)
 
-            # Identificacion colores
+            # '''''''''''''''''''''''''Identificacion colores''''''''''''''''''''''''''''''
 
             # Calcular la diferencia absoluta entre las dos imágenes
             diff = cv2.absdiff(img1, img2)
@@ -138,6 +153,14 @@ class ImageCompare(QWidget):
             # Aplicar dilatación
             kernel = np.ones((2,2), np.uint8)
             filtrado = cv2.dilate(thresh[1], kernel, iterations=1)
+
+            # Loopeamos los contornos
+            for contorno in contornos:
+                if cv2.contourArea(contorno) > 100:
+                    # Calculamos el rectangulo
+                    x, y, w, h = cv2.boundingRect(contorno)
+                    # Dibujamos el rectangulo
+                    cv2.rectangle(filtrado, (x,y), (x+w,y+h), (0,0,255),2)
 
 
             # Convertir imagen a formato HTML
